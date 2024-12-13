@@ -1,0 +1,55 @@
+#pragma once
+
+#include <vector>
+#include <Eigen/Core>
+#include <Eigen/Cholesky>
+
+template <typename KernelType>
+class GaussianProcess
+{
+ public:
+  GaussianProcess(const KernelType& kernel, double noise) : kernel(kernel), noise(noise) {}
+
+  void addObservation(const Eigen::VectorXd& x, double y)
+  {
+    inputs.push_back(x);
+    outputs.push_back(y);
+  }
+
+  double minimum() const
+  {
+    return *std::min_element(outputs.begin(), outputs.end());
+  }
+
+  std::pair<double, double> predict(const Eigen::VectorXd& xNew) const
+  {
+    if (inputs.empty()) return {0.0, 1.0};
+    int n = inputs.size();
+
+    Eigen::VectorXd k(n);
+    for (int i = 0; i < n; i++) k[i] = this->kernel(xNew, inputs[i]);
+
+    Eigen::MatrixXd K(n, n);
+    for (int i = 0; i < n; i++)
+    {
+      for (int j = 0; j < n; j++)
+      {
+        K(i, j) = this->kernel(inputs[i], inputs[i]);
+      }
+
+      // Add noise to diagonal
+      K(i, i) += noise;
+    }
+
+    Eigen::VectorXd kTransKInv = K.llt().solve(k);
+    double mean = kTransKInv.dot(Eigen::Map<const Eigen::VectorXd>(outputs.data(), n));
+    double variance = this->kernel(xNew, xNew) - k.dot(kTransKInv);
+    return {mean, variance};
+  }
+
+ private:
+  double noise;
+  std::vector<Eigen::VectorXd> inputs;
+  std::vector<double> outputs;
+  KernelType kernel;
+};

@@ -1,0 +1,24 @@
+#pragma once
+
+#include <Eigen/Core>
+
+class CovarianceKernel
+{
+ public:
+  virtual double operator()(const Eigen::VectorXd& x, const Eigen::VectorXd& y) const = 0;
+};
+
+class RBFKernel : public CovarianceKernel
+{
+ public:
+  RBFKernel(double sigma = 1.0) : sigma(sigma) {}
+
+  double operator()(const Eigen::VectorXd& x, const Eigen::VectorXd& y) const override
+  {
+    // ||x-y||欧几里得距离, sigma:核宽度
+    return std::exp(-(x - y).squaredNorm() / (2 * sigma * sigma));
+  }
+
+ private:
+  double sigma;
+};

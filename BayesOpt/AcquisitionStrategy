@@ -1,0 +1,120 @@
+#pragma once
+
+#include <vector>
+#include <Eigen/Core>
+#include "GaussianProcess"
+
+template <typename GPType>
+class AcquisitionStrategy
+{
+ public:
+  virtual Eigen::VectorXd sample(const GPType& gp,
+                                 const std::vector<Eigen::VectorXd>& candidates) const = 0;
+
+  // 标准正态分布的累积分布函数
+  double standardCDF(double x) const
+  {
+    return 0.5 * (1.0 + std::erf(x / std::sqrt(2.0)));
+  }
+
+  // 标准正态分布的概率密度函数
+  double standardPDF(double x) const
+  {
+    return (1.0 / std::sqrt(2.0 * M_PI)) * std::exp(-0.5 * x * x);
+  }
+};
+
+template <typename GPType>
+class ExpectedImprovement : public AcquisitionStrategy<GPType>
+{
+ public:
+  Eigen::VectorXd sample(const GPType& gp,
+                         const std::vector<Eigen::VectorXd>& candidates) const override
+  {
+    double bestScore = std::numeric_limits<double>::lowest();
+    Eigen::VectorXd bestCandidate;
+    for (const auto& x : candidates)
+    {
+      auto [mean, variance] = gp.predict(x);
+      double ei = expectedImprovement(x, gp.minimum(), mean, std::sqrt(variance));
+      if (ei > bestScore)
+      {
+        bestScore = ei;
+        bestCandidate = x;
+      }
+    }
+    return bestCandidate;
+  }
+
+ private:
+  double expectedImprovement(const Eigen::VectorXd& x, double fmin, double mu, double sigma) const
+  {
+    // 标准差为0, 没有改进空间
+    if (std::abs(sigma) < 1e-8) return 0.0;
+    double Z = (mu - fmin) / sigma;
+    double ei = (mu - fmin) * this->standardCDF(Z) + sigma * this->standardPDF(Z);
+    return ei;
+  }
+};
+
+template <typename GPType>
+class ProbabilityImprovement : public AcquisitionStrategy<GPType>
+{
+ public:
+  Eigen::VectorXd sample(const GPType& gp,
+                         const std::vector<Eigen::VectorXd>& candidates) const override
+  {
+    double bestScore = std::numeric_limits<double>::lowest();
+    Eigen::VectorXd bestCandidate;
+    for (const auto& x : candidates)
+    {
+      auto [mean, variance] = gp.predict(x);
+      double pi = probabilityImprovement(x, gp.minimum(), mean, std::sqrt(variance));
+      if (pi > bestScore)
+      {
+        bestScore = pi;
+        bestCandidate = x;
+      }
+    }
+    return bestCandidate;
+  }
+
+ private:
+  double probabilityImprovement(const Eigen::VectorXd& x, double fmin, double mu,
+                                double sigma) const
+  {
+    // 标准差为0, 没有改进空间
+    if (std::abs(sigma) < 1e-8) return 0.0;
+    double Z = (mu - fmin) / sigma;
+    double pi = this->standardCDF(Z);
+    return pi;
+  }
+};
+
+template <typename GPType>
+class UpperConfidenceBound : public AcquisitionStrategy<GPType>
+{
+ public:
+  UpperConfidenceBound(double beta = 2.0) : beta(beta) {}
+
+  Eigen::VectorXd sample(const GPType& gp,
+                         const std::vector<Eigen::VectorXd>& candidates) const override
+  {
+    double bestScore = std::numeric_limits<double>::lowest();
+    Eigen::VectorXd bestCandidate;
+    for (const auto& x : candidates)
+    {
+      auto [mean, variance] = gp.predict(x);
+      double ucb = mean + beta * std::sqrt(variance);
+      if (ucb > bestScore)
+      {
+        bestScore = ucb;
+        bestCandidate = x;
+      }
+    }
+    return bestCandidate;
+  }
+
+ private:
+  double beta;
+};
