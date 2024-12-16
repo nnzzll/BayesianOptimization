@@ -3,8 +3,9 @@
 #include <vector>
 #include <Eigen/Core>
 #include <Eigen/Cholesky>
+#include "Kernel"
 
-template <typename KernelType>
+template <typename KernelType = RBFKernel>
 class GaussianProcess
 {
  public:
@@ -16,9 +17,13 @@ class GaussianProcess
     outputs.push_back(y);
   }
 
-  double minimum() const
+  // 找到最佳的解
+  std::pair<Eigen::VectorXd, double> minimum() const
   {
-    return *std::min_element(outputs.begin(), outputs.end());
+    Eigen::VectorXd x =
+        inputs[std::distance(outputs.begin(), std::min_element(outputs.begin(), outputs.end()))];
+    double y = *std::min_element(outputs.begin(), outputs.end());
+    return std::make_pair(x, y);
   }
 
   std::pair<double, double> predict(const Eigen::VectorXd& xNew) const
@@ -29,22 +34,26 @@ class GaussianProcess
     Eigen::VectorXd k(n);
     for (int i = 0; i < n; i++) k[i] = this->kernel(xNew, inputs[i]);
 
+    Eigen::VectorXd kTransKInv = KInv * k;
+    double mean = kTransKInv.dot(Eigen::Map<const Eigen::VectorXd>(outputs.data(), n));
+    double variance = this->kernel(xNew, xNew) - k.dot(kTransKInv);
+    return {mean, variance};
+  }
+
+  void update()
+  {
+    int n = inputs.size();
     Eigen::MatrixXd K(n, n);
     for (int i = 0; i < n; i++)
     {
       for (int j = 0; j < n; j++)
       {
-        K(i, j) = this->kernel(inputs[i], inputs[i]);
+        K(i, j) = this->kernel(inputs[i], inputs[j]);
       }
-
-      // Add noise to diagonal
-      K(i, i) += noise;
     }
 
-    Eigen::VectorXd kTransKInv = K.llt().solve(k);
-    double mean = kTransKInv.dot(Eigen::Map<const Eigen::VectorXd>(outputs.data(), n));
-    double variance = this->kernel(xNew, xNew) - k.dot(kTransKInv);
-    return {mean, variance};
+    K += noise * Eigen::MatrixXd::Identity(n, n);
+    KInv = K.llt().solve(Eigen::MatrixXd::Identity(n, n));
   }
 
  private:
@@ -52,4 +61,5 @@ class GaussianProcess
   std::vector<Eigen::VectorXd> inputs;
   std::vector<double> outputs;
   KernelType kernel;
+  Eigen::MatrixXd K, KInv;
 };

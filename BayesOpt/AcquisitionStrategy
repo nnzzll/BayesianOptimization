@@ -36,7 +36,7 @@ class ExpectedImprovement : public AcquisitionStrategy<GPType>
     for (const auto& x : candidates)
     {
       auto [mean, variance] = gp.predict(x);
-      double ei = expectedImprovement(x, gp.minimum(), mean, std::sqrt(variance));
+      double ei = expectedImprovement(x, gp.minimum().second, mean, std::sqrt(variance));
       if (ei > bestScore)
       {
         bestScore = ei;
@@ -69,7 +69,7 @@ class ProbabilityImprovement : public AcquisitionStrategy<GPType>
     for (const auto& x : candidates)
     {
       auto [mean, variance] = gp.predict(x);
-      double pi = probabilityImprovement(x, gp.minimum(), mean, std::sqrt(variance));
+      double pi = probabilityImprovement(x, gp.minimum().second, mean, std::sqrt(variance));
       if (pi > bestScore)
       {
         bestScore = pi;

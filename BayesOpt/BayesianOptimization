@@ -1,0 +1,106 @@
+#pragma once
+
+#include <iostream>
+#include <random>
+#include <vector>
+#include <Eigen/Core>
+
+template <typename GPType, typename AcquisitionStrategyType>
+class BayesianOptimization
+{
+ public:
+  BayesianOptimization(const GPType& gp, const AcquisitionStrategyType& strategy,
+                       const std::vector<Eigen::Vector2d>& bounds, int trainSamples,
+                       int nCandidates, int maxIters = 20, int seed = 2024)
+      : gp(gp),
+        strategy(strategy),
+        bounds(bounds),
+        trainSamples(trainSamples),
+        nCandidates(nCandidates),
+        maxIters(maxIters)
+  {
+    rng.seed(seed);
+  }
+
+  template <typename FuncType>
+  Eigen::VectorXd optimize(const FuncType& f, const Eigen::VectorXd& x, bool verbose = false)
+  {
+    if (!bounds.empty())
+    {
+      if (x.size() != bounds.size())
+      {
+        std::cerr << "inputs size != bounds size" << std::endl;
+        return x;
+      }
+    }
+
+    for (size_t i = 0; i < trainSamples; i++)
+    {
+      auto [train_x, train_y] = createSamples(f);
+      gp.addObservation(train_x, train_y);
+    }
+    gp.update();
+
+    for (int iter = 0; iter < maxIters; iter++)
+    {
+      // 均匀采样侯选点
+      std::vector<Eigen::VectorXd> candidates = createCandidates();
+      // 在侯选点中评估采集函数
+      Eigen::VectorXd bestCandidate = strategy.sample(gp, candidates);
+      // 评估目标函数并更新模型
+      double y = f(bestCandidate);
+      gp.addObservation(bestCandidate, y);
+      gp.update();
+
+      if (verbose)
+      {
+        std::cout << "Iter:" << iter + 1 << "\tBest candidate:" << bestCandidate.transpose()
+                  << " f:" << y << std::endl;
+      }
+    }
+
+    return gp.minimum().first;
+  }
+
+ private:
+  GPType gp;
+  AcquisitionStrategyType strategy;
+  std::mt19937 rng;
+  std::vector<Eigen::Vector2d> bounds;
+  int trainSamples;  // 训练样本量, 通常为10 * dim
+  int maxIters;      // 最大迭代次数
+  int nCandidates;   // 侯选点数量
+
+  template <typename FuncType>
+  std::pair<Eigen::VectorXd, double> createSamples(const FuncType& f)
+  {
+    int dim = bounds.size();
+    Eigen::VectorXd x = Eigen::VectorXd::Zero(dim);
+    double y = std::numeric_limits<double>::max();
+    for (int i = 0; i < dim; i++)
+    {
+      std::uniform_real_distribution<double> distribution(bounds[i][0], bounds[i][1]);
+      x[i] = distribution(rng);
+    }
+    y = f(x);
+    return std::make_pair(x, y);
+  }
+
+  std::vector<Eigen::VectorXd> createCandidates()
+  {
+    int dim = bounds.size();
+    std::vector<Eigen::VectorXd> candidates;
+    for (int i = 0; i < nCandidates; i++)
+    {
+      Eigen::VectorXd candidate(dim);
+
+      for (int j = 0; j < dim; j++)
+      {
+        std::uniform_real_distribution<double> distribution(bounds[j][0], bounds[j][1]);
+        candidate[j] = distribution(rng);
+      }
+      candidates.push_back(candidate);
+    }
+    return candidates;
+  }
+};
