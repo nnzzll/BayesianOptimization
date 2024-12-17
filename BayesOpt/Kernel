@@ -22,3 +22,48 @@ class RBFKernel : public CovarianceKernel
  private:
   double sigma;
 };
+
+class MaternKernel : public CovarianceKernel
+{
+ public:
+  MaternKernel(double sigma = 1.0, double rho = 1.0, double nu = 1.5)
+      : sigma(sigma), rho(rho), nu(nu)
+  {
+  }
+
+  double operator()(const Eigen::VectorXd& x, const Eigen::VectorXd& y) const override
+  {
+    double distance = (x - y).norm();
+    double ret;
+    if (nu == 0.5)
+    {
+      ret = std::exp(-distance / rho);
+    }
+    else if (nu == 1.5)
+    {
+      ret = distance * std::sqrt(3) / rho;
+      ret = (1.0 + ret) * std::exp(-ret);
+    }
+    else if (nu == 2.5)
+    {
+      ret = distance * std::sqrt(5) / rho;
+      ret = (1.0 + ret + ret * ret / 3.0) * std::exp(-ret);
+    }
+    else if (nu == std::numeric_limits<double>::infinity())
+    {
+      ret = std::exp(-distance * distance / 2.0);
+    }
+    // 默认就用1.5
+    else
+    {
+      ret = distance * std::sqrt(3) / rho;
+      ret = (1.0 + ret) * std::exp(-ret);
+    }
+    return sigma * sigma * ret;
+  }
+
+ private:
+  double sigma;
+  double rho;
+  double nu;
+};
