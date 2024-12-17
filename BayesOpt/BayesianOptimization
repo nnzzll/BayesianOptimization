@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <iostream>
 #include <random>
 #include <vector>
@@ -23,17 +24,11 @@ class BayesianOptimization
   }
 
   template <typename FuncType>
-  Eigen::VectorXd optimize(const FuncType& f, const Eigen::VectorXd& x, bool verbose = false)
+  Eigen::VectorXd optimize(const FuncType& f, bool verbose = false)
   {
-    if (!bounds.empty())
-    {
-      if (x.size() != bounds.size())
-      {
-        std::cerr << "inputs size != bounds size" << std::endl;
-        return x;
-      }
-    }
-
+    auto begin = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
     for (size_t i = 0; i < trainSamples; i++)
     {
       auto [train_x, train_y] = createSamples(f);
@@ -57,6 +52,13 @@ class BayesianOptimization
         std::cout << "Iter:" << iter + 1 << "\tBest candidate:" << bestCandidate.transpose()
                   << " f:" << y << std::endl;
       }
+    }
+    auto end = std::chrono::duration_cast<std::chrono::milliseconds>(
+                   std::chrono::system_clock::now().time_since_epoch())
+                   .count();
+    if (verbose)
+    {
+      std::cout << "Time:" << end - begin << "ms" << std::endl;
     }
 
     return gp.minimum().first;

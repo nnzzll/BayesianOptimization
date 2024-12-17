@@ -51,8 +51,10 @@ class ExpectedImprovement : public AcquisitionStrategy<GPType>
   {
     // 标准差为0, 没有改进空间
     if (std::abs(sigma) < 1e-8) return 0.0;
-    double Z = (mu - fmin) / sigma;
-    double ei = (mu - fmin) * this->standardCDF(Z) + sigma * this->standardPDF(Z);
+    double Z = (fmin - mu) / sigma;
+    double exploit = (fmin - mu) * this->standardCDF(Z);
+    double explore = sigma * this->standardPDF(Z);
+    double ei = exploit + explore;
     return ei;
   }
 };
@@ -85,30 +87,30 @@ class ProbabilityImprovement : public AcquisitionStrategy<GPType>
   {
     // 标准差为0, 没有改进空间
     if (std::abs(sigma) < 1e-8) return 0.0;
-    double Z = (mu - fmin) / sigma;
+    double Z = (fmin - mu) / sigma;
     double pi = this->standardCDF(Z);
     return pi;
   }
 };
 
 template <typename GPType>
-class UpperConfidenceBound : public AcquisitionStrategy<GPType>
+class LowerConfidenceBound : public AcquisitionStrategy<GPType>
 {
  public:
-  UpperConfidenceBound(double beta = 2.0) : beta(beta) {}
+  LowerConfidenceBound(double beta = 2.0) : beta(beta) {}
 
   Eigen::VectorXd sample(const GPType& gp,
                          const std::vector<Eigen::VectorXd>& candidates) const override
   {
-    double bestScore = std::numeric_limits<double>::lowest();
+    double bestScore = std::numeric_limits<double>::max();
     Eigen::VectorXd bestCandidate;
     for (const auto& x : candidates)
     {
       auto [mean, variance] = gp.predict(x);
-      double ucb = mean + beta * std::sqrt(variance);
-      if (ucb > bestScore)
+      double lcb = mean - beta * std::sqrt(variance);
+      if (lcb < bestScore)
       {
-        bestScore = ucb;
+        bestScore = lcb;
         bestCandidate = x;
       }
     }

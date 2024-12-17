@@ -37,7 +37,7 @@ class GaussianProcess
     Eigen::VectorXd kTransKInv = KInv * k;
     double mean = kTransKInv.dot(Eigen::Map<const Eigen::VectorXd>(outputs.data(), n));
     double variance = this->kernel(xNew, xNew) - k.dot(kTransKInv);
-    return {mean, variance};
+    return {mean, std::max(0.0, variance)};
   }
 
   void update()
@@ -61,5 +61,5 @@ class GaussianProcess
   std::vector<Eigen::VectorXd> inputs;
   std::vector<double> outputs;
   KernelType kernel;
-  Eigen::MatrixXd K, KInv;
+  Eigen::MatrixXd KInv;
 };
